@@ -6,6 +6,8 @@ import BatAbi from '../abis/BAT.json';
 import BatAddress from '../abis/BAT-address.json';
 import DS_RolesAbi from '../abis/DSRoles.json';
 import DS_RolesAddress from '../abis/DSRoles-address.json';
+import VatAbi from '../abis/Vat.json'
+import VatAddress from '../abis/Vat-address.json'
 import { Interface } from 'readline';
 import { DeployGemRequestDTO } from './dto/deployGemRequestDTO';
 import { FundRequestDTO } from './dto/fundRequestDTO';
@@ -13,9 +15,12 @@ import { AuthRequestDTO } from './dto/authRequestDTO';
 
 @Injectable()
 export class AppService {
-  privateKey = process.env.CONTRACT_OWNER_API_KEY;
-  node_provider = new ethers.JsonRpcProvider('http://127.0.0.1:8545/');
-  contractOwner = new ethers.Wallet(this.privateKey, this.node_provider);
+  privateKey = process.env.CONTRACT_OWNER_HARDHAT_API_KEY;
+  hardhat_node_provider = new ethers.JsonRpcProvider('http://127.0.0.1:8545/');
+  //ganache_node_provider=new ethers.JsonRpcProvider('http://127.0.0.1:8545')
+  //contractOwner = new ethers.Wallet(this.privateKey, this.hardhat_node_provider);
+  contractOwner = new ethers.Wallet(this.privateKey, this.hardhat_node_provider);
+  delay = ms => new Promise(res => setTimeout(res, ms));
 
   getHello(): string {
     return 'Hello World!';
@@ -32,26 +37,20 @@ export class AppService {
       data.priceType,
       data.batAddress,
     );
+
+    const Vat =new ethers.Contract(
+      VatAddress.address,
+      VatAbi.abi,
+      this.contractOwner
+    )
     //Authorize for gemJoin to call vat
-    //await vat.connect(account0).rely(gemJoin.address);
+    //ToDO: increase nonce instead of wait 1s for transaction confirmation 
+    await this.delay(1000);
+    console.log("Waited 1s");
+    await Vat.rely(gemJoin.getAddress());
 
     const gemJoinAddress = await gemJoin.getAddress();
     return gemJoinAddress;
-  }
-
-  async requestFund(data: FundRequestDTO): Promise<string> {
-    //Todo: switch case for each gem Token
-    //For simplicity just hardfix gemToken is Bat token
-
-    const bat = new ethers.Contract(
-      BatAddress.address,
-      BatAbi.abi,
-      this.contractOwner,
-    );
-    await bat.mintz(data.receiver, ethers.parseEther(data.amount));
-    //ToDo: Copare balance before and after Fund
-    //to know fund requets is success or not
-    return 'ok';
   }
 
   async requestAuth(data: AuthRequestDTO): Promise<string> {
@@ -63,9 +62,37 @@ export class AppService {
     //Grant  authorized permission for requester
     //ToDo: switch case for each permission type
     //For simplicity HardFix root-user type
+    const nonce2 = await this.hardhat_node_provider.getTransactionCount(DS_RolesAddress.address);
+    console.log("nonce",nonce2)
     await ds_roles.setRootUser(data.requester, true);
+    
     //ToDo: Check Permission
     //to know auth requets is success or not
-    return 'ok';
+    await this.delay(1000);
+    console.log("Waited 1s");
+    return 'auth ok';
+  }
+
+  async requestFund(data: FundRequestDTO): Promise<string> {
+    //Todo: switch case for each gem Token
+    //For simplicity just hardfix gemToken is Bat token
+    const bat = new ethers.Contract(
+      BatAddress.address,
+      BatAbi.abi,
+      this.contractOwner,
+    );
+    const nonce1 = await this.hardhat_node_provider.getTransactionCount( BatAddress.address);
+    console.log("nonce ",nonce1)
+
+    await bat.setAuthority(DS_RolesAddress.address)
+    await this.delay(1000);
+    console.log("Waited 1s");
+    
+    await bat.mintz(data.receiver, ethers.parseEther(data.amount));
+    //ToDo: Compare balance before and after Fund
+    //to know fund requets is success or not
+    return 'fund ok';
   }
 }
+
+
