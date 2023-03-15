@@ -81,17 +81,23 @@ export class AppService {
       BatAbi.abi,
       this.contractOwner,
     );
+    const receiverBalanceBefore = await bat.getAddressBalance(data.receiver);
     const nonce1 = await this.hardhat_node_provider.getTransactionCount( BatAddress.address);
     console.log("nonce ",nonce1)
 
     await bat.setAuthority(DS_RolesAddress.address)
     await this.delay(1000);
     console.log("Waited 1s");
-    
     await bat.mintz(data.receiver, ethers.parseEther(data.amount));
+    const receiverBalanceAfter = await bat.getAddressBalance(data.receiver);
+    const myResult = receiverBalanceAfter.toString();
     //ToDo: Compare balance before and after Fund
     //to know fund requets is success or not
-    return 'fund ok';
+    if(myResult != receiverBalanceBefore.toString()){
+      return myResult;
+    }else{
+      return "fund failed";
+    }
   }
 }
 
